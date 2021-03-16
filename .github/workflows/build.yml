@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v2
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          # make Windows packages like Clang available in MSYS
+          path-type: inherit
+          # install MSYS packages
+          install: make autoconf automake libtool
+      - name: Install Windows packages
+        run: choco install ninja
+      - name: Build toolchain
+        run: |
+          :: get full path of msys2.cmd from setup-msys2 as Bash shell,
+          :: because it doesn't install msys2_shell.cmd used in build.bat
+          for /f %%G in ('where msys2.cmd') do set "BASH=%%G -c"
+          build.bat
+        shell: cmd

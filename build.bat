@@ -12,15 +12,18 @@ IF "%selfWrapped%"=="" (
 )
 endlocal
 
-:: Reset environment
-call RefreshEnv.cmd >nul
+:: save original path
+set ORIGINAL_PATH=%PATH%
 
 :: Load environment
 call %~dp0\env\sdkenv.bat
 
-:: set up Visual Studio developer environment for finding prerequisites below
-set ARCH=x64
-call :vsdevcmd || exit 1
+:: ensure we're running from a developer command prompt
+if  "%DevEnvDir%" == "" (
+  echo Error: missing developer environment.
+  echo Please run from a Visual Studio Developer Command prompt.
+  exit 1
+)
 
 :: Check if all required commands are installed
 echo ### Checking prerequisites
@@ -49,9 +52,6 @@ if not exist "%INSTALL_ROOT%" (mkdir "%INSTALL_ROOT%")
 
 :: Run phases
 for %%G in (%ARCHITECTURES%) do (
-  :: Reset environment so we can call vcvarsall.bat again
-  call RefreshEnv.cmd >nul
-  
   set ARCH=%%G
   call :buildarch
 )
@@ -105,8 +105,14 @@ goto :eof
   goto :eof
 
 :vsdevcmd
+  echo 4
   :: https://github.com/microsoft/vswhere/wiki/Start-Developer-Command-Prompt
   for /f "usebackq delims=" %%i in (`"%ROOT_DIR%\bin\vswhere.exe" -latest -property installationPath`) do (
+    :: restore original path and reset INCLUDE and LIBPATH before running
+    :: vcvarsall.bat to avoid "The input line is too long" error
+    set "PATH=%ORIGINAL_PATH%"
+    set INCLUDE=
+    set LIBPATH=
     :: This assumes we are on a Windows x64 installation
     if "%ARCH%" == "x86" (
       call "%%i\VC\Auxiliary\Build\vcvarsall.bat" x64_x86 || exit 1
@@ -117,8 +123,8 @@ goto :eof
     ) else if "%ARCH%" == "x64" (
       call "%%i\VC\Auxiliary\Build\vcvarsall.bat" x64 || exit 1
       set TARGET=x86_64-pc-windows
-      set CFLAGS=
-      set CXXFLAGS=
+      set CFLAGS=-m64
+      set CXXFLAGS=-m64
       set LDFLAGS=-fuse-ld=lld
     ) else (
       echo Unknown ARCH: %ARCH%
